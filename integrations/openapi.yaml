@@ -1,0 +1,145 @@
+openapi: 3.1.0
+info:
+  title: Hostel Sampark Platform API
+  version: 1.0.0
+  description: >
+    Connect another application's server to Hostel Sampark using standard JSON
+    HTTP requests. Browser-origin approval only allows browser reads of the
+    public configuration endpoint; it is not authentication. Keep API keys
+    on servers, never in browser code.
+servers:
+  - url: https://hostel-sampark-app.onrender.com
+    description: Replace with the deployed Hostel Sampark address.
+paths:
+  /api/v1/config:
+    get:
+      operationId: getPublicConfig
+      summary: Read public portal options
+      description: Returns configured hostels, categories, portal status, and AI availability.
+      responses:
+        "200":
+          description: Current public settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicConfig"
+  /api/v1/submit:
+    post:
+      operationId: submitGrievance
+      summary: Submit a grievance
+      security:
+        - platformBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GrievanceSubmission"
+      responses:
+        "201":
+          description: Grievance accepted. Give the private lookup code only to its submitter.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionReceipt"
+        "400":
+          description: Invalid fields or values.
+        "401":
+          description: Missing or invalid platform API key.
+        "403":
+          description: Key lacks submission permission or submissions are closed.
+        "503":
+          description: API or grievance storage is not configured.
+  /api/v1/status:
+    post:
+      operationId: getGrievanceStatus
+      summary: Check a grievance status
+      security:
+        - platformBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusLookup"
+      responses:
+        "200":
+          description: Status for the matching private ticket.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResult"
+        "400":
+          description: Invalid ticket ID or missing lookup code.
+        "401":
+          description: Missing or invalid platform API key.
+        "403":
+          description: Key lacks status permission.
+        "404":
+          description: No grievance matches both credentials.
+        "503":
+          description: API or grievance storage is not configured.
+components:
+  securitySchemes:
+    platformBearer:
+      type: http
+      scheme: bearer
+      description: A unique per-integration API key, kept in that integration's server environment.
+  schemas:
+    PublicConfig:
+      type: object
+      required: [hostels, categories, portal_open, ai_open]
+      properties:
+        hostels:
+          type: array
+          items:
+            type: string
+        categories:
+          type: array
+          items:
+            type: string
+        portal_open:
+          type: boolean
+        ai_open:
+          type: boolean
+    GrievanceSubmission:
+      type: object
+      required: [title, description, hostel, category]
+      properties:
+        title:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          maxLength: 2000
+        hostel:
+          type: string
+        category:
+          type: string
+    SubmissionReceipt:
+      type: object
+      required: [ticket_id, lookup_code]
+      properties:
+        ticket_id:
+          type: integer
+        lookup_code:
+          type: string
+          description: Private code; display only to the person submitting the grievance.
+    StatusLookup:
+      type: object
+      required: [ticket_id, lookup_code]
+      properties:
+        ticket_id:
+          oneOf:
+            - type: integer
+            - type: string
+        lookup_code:
+          type: string
+    StatusResult:
+      type: object
+      required: [ticket_id, status]
+      properties:
+        ticket_id:
+          type: integer
+        status:
+          type: string

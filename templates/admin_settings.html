@@ -7,7 +7,7 @@
     <div class="content-card rounded-2xl border p-6 sm:p-8">
         <h1 class="display-title text-2xl font-bold">Admin settings</h1>
         <p class="mt-2 text-sm text-slate-600">
-            Change the hostel list and message shown to visitors.
+            Manage hostel information, the complete AI instructions, and optional browser connections.
         </p>
 
         <form action="{{ url_for('admin_settings') }}" method="POST" class="mt-6 space-y-5">
@@ -98,7 +98,34 @@
                     </option>
                 </select>
                 <p class="mt-1 text-xs text-slate-500">
-                    Enable or disable the AI Assistant feature for users.
+                    Enable or disable the AI Assistant feature for users. The app uses a Groq-hosted model selected in the code; the Groq key stays on the server.
+                </p>
+            </div>
+            <div>
+                <label for="ai_custom_instructions" class="block text-sm font-semibold">Complete AI instructions</label>
+                <textarea
+                    id="ai_custom_instructions"
+                    name="ai_custom_instructions"
+                    rows="8"
+                    maxlength="4000"
+                    class="mt-1 w-full rounded-lg border p-3"
+                >{{ settings.ai_custom_instructions }}</textarea>
+                <p class="mt-1 text-xs text-slate-500">
+                    Write all guidance for the assistant here, including its role, allowed topics, and how to handle unrelated or unknown questions. If this is blank, AI chat stays unavailable.
+                </p>
+            </div>
+            <div>
+                <label for="api_allowed_origins" class="block text-sm font-semibold">Approved website origins (optional)</label>
+                <input
+                    id="api_allowed_origins"
+                    name="api_allowed_origins"
+                    type="text"
+                    value="{{ settings.api_allowed_origins }}"
+                    placeholder="https://your-connected-site.com"
+                    class="mt-1 w-full rounded-lg border p-3"
+                >
+                <p class="mt-1 text-xs text-slate-500">
+                    Use the exact address, such as https://your-site.example—not a name, page link, or *.example. Separate addresses with commas. Only needed when a browser reads public API settings; this is not a password.
                 </p>
             </div>
             <div class="flex flex-wrap gap-3">
