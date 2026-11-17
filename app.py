@@ -105,12 +105,21 @@ def admin_credential_version() -> str:
     return hmac.new(app.config["SECRET_KEY"].encode(), credentials, "sha256").hexdigest()
 
 
-def parse_ticket_id(ticket_id_text: Optional[str]) -> Optional[int]:
-    """Parse the integer identity used by the grievance table."""
-    ticket_id_text = (ticket_id_text or "").strip()
-    if len(ticket_id_text) > 19 or not re.fullmatch(r"[0-9]+", ticket_id_text):
+def parse_ticket_id(ticket_id_value):
+    """Accept a ticket ID sent as either a number or text."""
+    if isinstance(ticket_id_value, bool):
         return None
-    ticket_id = int(ticket_id_text)
+
+    if isinstance(ticket_id_value, int):
+        ticket_id = ticket_id_value
+    elif isinstance(ticket_id_value, str):
+        ticket_id_text = ticket_id_value.strip()
+        if len(ticket_id_text) > 19 or not re.fullmatch(r"[0-9]+", ticket_id_text):
+            return None
+        ticket_id = int(ticket_id_text)
+    else:
+        return None
+
     return ticket_id if 0 < ticket_id <= 9223372036854775807 else None
 
 
