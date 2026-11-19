@@ -570,30 +570,42 @@ def api_grievance_status():
 
 @app.route("/submit", methods=["GET", "POST"])
 def submit_grievance():
+    if not session.get("student_logged_in"):
+        flash("Please sign in as a student to submit a grievance.", "error")
+        return redirect(url_for("student_login"))
+
     if not is_portal_open():
         flash("Grievance submissions are currently closed.", "error")
         return redirect(url_for("home"))
+
+    student_id = session.get("student_id")
+    student_hostel = session.get("student_hostel")
+
     if request.method == "GET":
         return render_template(
             "index.html",
             hostels=get_configured_hostels(),
             categories=get_configured_categories(),
+            student_hostel=student_hostel,
         )
+
     title = request.form.get("title", "").strip()
     description = request.form.get("description", "").strip()
-    hostel = request.form.get("hostel", "").strip()
+    hostel = request.form.get("hostel", "").strip() or student_hostel
     category = request.form.get("category", "").strip()
+
     if hostel not in get_configured_hostels():
         flash("Choose a valid hostel from the list.", "error")
         return redirect(url_for("submit_grievance"))
     if category not in get_configured_categories():
         flash("Choose a valid issue category from the list.", "error")
         return redirect(url_for("submit_grievance"))
+
     # Input validation: length limits for both title and description
     if not title or len(title) > 150:
         flash("Title must be between 1 and 150 characters.", "error")
         return redirect(url_for("submit_grievance"))
-        
+
     if not description or len(description) > 2000:
         flash("Description must be between 1 and 2000 characters.", "error")
         return redirect(url_for("submit_grievance"))
@@ -601,19 +613,14 @@ def submit_grievance():
     if admin_database is None:
         flash("Grievance submission needs SUPABASE_SECRET_KEY configured on the server.", "error")
         return redirect(url_for("submit_grievance"))
-    
-    lookup_code = secrets.token_urlsafe(32)
-    lookup_token_hash = hashlib.sha256(
-        lookup_code.encode("utf-8")
-    ).hexdigest()
-    
+
     data = {
+        "student_id": student_id,
         "title": title,
         "hostel": hostel,
         "description": description,
         "category": category,
         "status": "Pending",
-        "lookup_token_hash": lookup_token_hash,
     }
 
     try:
@@ -622,61 +629,39 @@ def submit_grievance():
         if grievance is None:
             flash("The grievance was saved, but its ticket ID could not be returned.", "error")
             return redirect(url_for("submit_grievance"))
-        # The template needs the submitted details and ID, never the verifier.
-        grievance.pop("lookup_token_hash", None)
-        return render_template("submitted.html", grievance=grievance, lookup_code=lookup_code)
+
+        return render_template("submitted.html", grievance=grievance)
     except Exception:
         logger.exception("Failed to save grievance")
         flash("An error occurred while saving your grievance.", "error")
         return redirect(url_for("submit_grievance"))
 
 
+@app.route("/my-grievances")
 @app.route("/status", methods=["GET", "POST"])
 def grievance_status():
-    searched = request.method == "POST"
-    searched_id = request.form.get("ticket_id", "").strip() if searched else ""
-    lookup_code = request.form.get("lookup_code", "").strip() if searched else ""
+    if not session.get("student_logged_in"):
+        flash("Please sign in as a student to view your grievances.", "error")
+        return redirect(url_for("student_login"))
 
-    grievance = None
-    invalid_lookup = False
-    lookup_failed = False
+    student_id = session.get("student_id")
+    grievances = []
 
-    if searched:
-        ticket_id = parse_ticket_id(searched_id)
+    if admin_database:
+        try:
+            result = (
+                admin_database.table("grievance")
+                .select("id, title, hostel, description, category, admin_notes, status, created_at, updated_at")
+                .eq("student_id", student_id)
+                .order("created_at", desc=True)
+                .execute()
+            )
+            grievances = result.data or []
+        except Exception:
+            logger.exception("Failed to load student grievances")
+            flash("Could not retrieve your grievances right now. Please try again later.", "error")
 
-        if ticket_id is None or not lookup_code:
-            invalid_lookup = True
-        elif admin_database is None:
-            lookup_failed = True
-            flash("Private grievance lookup is not configured. Contact the administrator.", "error")
-        else:
-            lookup_token_hash = hashlib.sha256(
-                lookup_code.encode("utf-8")
-            ).hexdigest()
-
-            try:
-                database_result = (
-                    admin_database.table("grievance")
-                    .select("id, title, hostel, description, category, admin_notes, status, created_at, updated_at")
-                    .eq("id", ticket_id)
-                    .eq("lookup_token_hash", lookup_token_hash)
-                    .limit(1)
-                    .execute()
-                )
-                grievance = database_result.data[0] if database_result.data else None
-                invalid_lookup = grievance is None
-            except Exception:
-                lookup_failed = True
-                logger.exception("Failed to look up grievance")
-
-    return render_template(
-        "status.html",
-        searched=searched,
-        searched_id=searched_id,
-        grievance=grievance,
-        invalid_ticket_id=invalid_lookup,
-        lookup_failed=lookup_failed,
-    )
+    return render_template("my_grievances.html", grievances=grievances)
 
 @app.route("/student/verify-notice")
 def student_verify_notice():

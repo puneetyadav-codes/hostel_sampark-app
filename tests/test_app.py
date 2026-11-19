@@ -48,6 +48,9 @@ class FakeQuery:
     def select(self, *_args):
         return self
 
+    def order(self, *_args, **_kwargs):
+        return self
+
     def eq(self, column, value):
         self.filters[column] = value
         return self
@@ -97,8 +100,18 @@ class TestApp(unittest.TestCase):
         self.addCleanup(self.ai_ready_patch.stop)
         self.client = hostel_app.app.test_client()
 
+    def test_unauthenticated_user_redirected_from_submit(self):
+        response = self.client.get("/submit")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/student", response.headers["Location"])
+
     def test_submit_saves_grievance_and_shows_ticket(self):
         database = FakeDatabase()
+        with self.client.session_transaction() as sess:
+            sess["student_logged_in"] = True
+            sess["student_id"] = "test-student-uuid"
+            sess["student_hostel"] = "Saramati"
+
         with patch.object(hostel_app, "admin_database", database):
             response = self.client.post(
                 "/submit",
@@ -112,25 +125,25 @@ class TestApp(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"123", response.data)
-        self.assertIn("lookup_token_hash", database.inserted)
+        self.assertEqual(database.inserted["student_id"], "test-student-uuid")
         self.assertEqual(database.inserted["title"], "Broken light")
         self.assertEqual(database.inserted["hostel"], "Saramati")
         self.assertEqual(database.inserted["category"], "Electrical")
         self.assertEqual(database.inserted["status"], "Pending")
 
-    def test_wrong_private_code_does_not_show_grievance(self):
-        correct_code_hash = hashlib.sha256(b"right-code").hexdigest()
-        database = FakeDatabase(
-            [{"id": 123, "lookup_token_hash": correct_code_hash}]
-        )
+    def test_student_can_view_own_grievances(self):
+        database = FakeDatabase([
+            {"id": 123, "title": "My ticket", "student_id": "student-1", "status": "Pending"}
+        ])
+        with self.client.session_transaction() as sess:
+            sess["student_logged_in"] = True
+            sess["student_id"] = "student-1"
+
         with patch.object(hostel_app, "admin_database", database):
-            response = self.client.post(
-                "/status", data={"ticket_id": "123", "lookup_code": "wrong-code"}
-            )
+            response = self.client.get("/status")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"couldn't find a grievance", response.data)
-        self.assertNotIn(b"lookup_token_hash", response.data)
+        self.assertIn(b"My Grievances", response.data)
 
     def test_signed_out_user_is_redirected_from_admin(self):
         response = self.client.get("/admin")
