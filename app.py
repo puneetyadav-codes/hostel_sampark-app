@@ -474,14 +474,19 @@ def api_submit_grievance():
     description = data.get("description", "")
     hostel = data.get("hostel", "")
     category = data.get("category", "")
+    enrollment_no = data.get("enrollment_no", "")
 
-    if not all(isinstance(value, str) for value in [title, description, hostel, category]):
+    if not all(isinstance(value, str) for value in [title, description, hostel, category, enrollment_no]):
         return jsonify({"error": "All fields must be text."}), 400
 
     title = title.strip()
     description = description.strip()
     hostel = hostel.strip()
     category = category.strip()
+    enrollment_no = enrollment_no.strip()
+
+    if not enrollment_no:
+        return jsonify({"error": "A verified student enrollment_no is required."}), 400
 
     if not is_portal_open():
         return jsonify({"error": "Submissions are currently closed."}), 403
@@ -496,17 +501,30 @@ def api_submit_grievance():
     if admin_database is None:
         return jsonify({"error": "Submission storage is not configured."}), 503
 
-    lookup_code = secrets.token_urlsafe(32)
-    lookup_token_hash = hashlib.sha256(lookup_code.encode("utf-8")).hexdigest()
-
+    # Approval Gate: Validate that student exists and is approved
     try:
+        profile_res = (
+            admin_database.table("profiles")
+            .select("id, status")
+            .eq("enrollment_no", enrollment_no)
+            .limit(1)
+            .execute()
+        )
+        student_profile = profile_res.data[0] if profile_res.data else None
+        if not student_profile:
+            return jsonify({"error": "No student found with this enrollment number."}), 404
+        if student_profile.get("status") != "approved":
+            return jsonify({"error": "Student account is not approved by hostel administration."}), 403
+
+        student_id = student_profile["id"]
+
         result = admin_database.table("grievance").insert({
+            "student_id": student_id,
             "title": title,
             "description": description,
             "hostel": hostel,
             "category": category,
             "status": "Pending",
-            "lookup_token_hash": lookup_token_hash,
         }).execute()
 
         grievance = result.data[0] if result.data else None
@@ -515,7 +533,7 @@ def api_submit_grievance():
 
         return jsonify({
             "ticket_id": grievance["id"],
-            "lookup_code": lookup_code,
+            "status": "Pending",
         }), 201
 
     except Exception:
@@ -533,36 +551,41 @@ def api_grievance_status():
         return jsonify({"error": "Send a JSON object."}), 400
 
     ticket_id = parse_ticket_id(data.get("ticket_id"))
-    lookup_code = data.get("lookup_code", "")
+    enrollment_no = data.get("enrollment_no", "")
 
-    if ticket_id is None or not isinstance(lookup_code, str) or not lookup_code.strip():
-        return jsonify({"error": "A valid ticket_id and lookup_code are required."}), 400
+    if ticket_id is None:
+        return jsonify({"error": "A valid ticket_id is required."}), 400
 
     if admin_database is None:
         return jsonify({"error": "Complaint lookup is not configured."}), 503
 
-    lookup_token_hash = hashlib.sha256(
-        lookup_code.strip().encode("utf-8")
-    ).hexdigest()
-
     try:
-        result = (
+        # If enrollment_no is supplied, verify it matches
+        query = (
             admin_database.table("grievance")
-            .select("status")
+            .select("id, status, student_id, profiles(enrollment_no)")
             .eq("id", ticket_id)
-            .eq("lookup_token_hash", lookup_token_hash)
             .limit(1)
-            .execute()
         )
+        result = query.execute()
 
         grievance = result.data[0] if result.data else None
         if grievance is None:
             return jsonify({"error": "No complaint found for those details."}), 404
 
+        if enrollment_no and isinstance(enrollment_no, str) and enrollment_no.strip():
+            profile_info = grievance.get("profiles") or {}
+            if profile_info.get("enrollment_no") != enrollment_no.strip():
+                return jsonify({"error": "Enrollment number does not match this ticket."}), 403
+
         return jsonify({
             "ticket_id": ticket_id,
             "status": grievance.get("status"),
         })
+
+    except Exception:
+        logger.exception("API complaint status lookup failed")
+        return jsonify({"error": "Could not look up the complaint."}), 500
 
     except Exception:
         logger.exception("API complaint status lookup failed")

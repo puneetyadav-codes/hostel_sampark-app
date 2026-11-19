@@ -18,15 +18,16 @@ def load_grievance_form_options():
 
 
 def submit_hostel_grievance(form_data):
-    """Call from a server-side form handler; return the private code to the student."""
+    """Call from a server-side form handler; submits on behalf of verified student."""
     return client.submit_grievance(
         title=form_data["title"],
         description=form_data["description"],
         hostel=form_data["hostel"],
         category=form_data["category"],
+        enrollment_no=form_data["enrollment_no"],
     )
 
 
-def check_hostel_grievance(ticket_id, lookup_code):
-    """Check only the ticket whose private lookup code the student provides."""
-    return client.get_status(ticket_id, lookup_code)
+def check_hostel_grievance(ticket_id, enrollment_no=None):
+    """Check ticket status for reference."""
+    return client.get_status(ticket_id, enrollment_no=enrollment_no)

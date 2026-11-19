@@ -37,7 +37,7 @@ class TestPlatformIntegration(unittest.TestCase):
             receipt = HostelSamparkClient(
                 "https://sampark.example", "private-api-key"
             ).submit_grievance(
-                "Broken light", "It is not working.", "Saramati", "Electrical"
+                "Broken light", "It is not working.", "Saramati", "Electrical", "ENROLL123"
             )
 
         self.assertEqual(receipt["ticket_id"], 123)
@@ -48,6 +48,7 @@ class TestPlatformIntegration(unittest.TestCase):
             "description": "It is not working.",
             "hostel": "Saramati",
             "category": "Electrical",
+            "enrollment_no": "ENROLL123",
         })
 
     def test_python_client_surfaces_api_errors_without_credentials(self):
@@ -62,7 +63,7 @@ class TestPlatformIntegration(unittest.TestCase):
             with self.assertRaises(HostelSamparkApiError) as raised:
                 HostelSamparkClient(
                     "https://sampark.example", "private-api-key"
-                ).get_status(123, "lookup-code")
+                ).get_status(123, "ENROLL123")
 
         self.assertEqual(raised.exception.status_code, 403)
         self.assertEqual(str(raised.exception), "Key lacks permission.")

@@ -42,7 +42,7 @@ class HostelSamparkClient:
     def get_config(self):
         return self._request("GET", "/api/v1/config")
 
-    def submit_grievance(self, title, description, hostel, category):
+    def submit_grievance(self, title, description, hostel, category, enrollment_no):
         return self._request(
             "POST",
             "/api/v1/submit",
@@ -51,15 +51,19 @@ class HostelSamparkClient:
                 "description": description,
                 "hostel": hostel,
                 "category": category,
+                "enrollment_no": enrollment_no,
             },
             authenticated=True,
         )
 
-    def get_status(self, ticket_id, lookup_code):
+    def get_status(self, ticket_id, enrollment_no=None):
+        payload = {"ticket_id": ticket_id}
+        if enrollment_no:
+            payload["enrollment_no"] = enrollment_no
         return self._request(
             "POST",
             "/api/v1/status",
-            {"ticket_id": ticket_id, "lookup_code": lookup_code},
+            payload,
             authenticated=True,
         )
 
