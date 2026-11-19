@@ -887,7 +887,7 @@ def admin():
             offset = (page - 1) * ADMIN_PAGE_SIZE
             database_result = (
                 admin_database.table("grievance")
-                .select("id, title, hostel, description, category, admin_notes, status, created_at, updated_at")
+                .select("id, title, hostel, description, category, admin_notes, status, created_at, updated_at, profiles(full_name, room_number, contact_number)")
                 .order("created_at", desc=True)
                 .order("id", desc=True)
                 .range(offset, offset + ADMIN_PAGE_SIZE)
@@ -908,6 +908,56 @@ def admin():
         page=page,
         has_next_page=has_next_page,
     )
+
+
+@app.route("/admin/students")
+def admin_students():
+    if not is_admin_logged_in():
+        return redirect(url_for("login"))
+
+    students = []
+    if admin_database:
+        try:
+            result = (
+                admin_database.table("profiles")
+                .select("id, full_name, hostel, room_number, enrollment_no, contact_number, status, created_at")
+                .order("created_at", desc=True)
+                .execute()
+            )
+            students = result.data or []
+        except Exception:
+            logger.exception("Failed to load students for admin")
+            flash("Could not load student list. Please verify database connection.", "error")
+
+    return render_template("admin_students.html", students=students)
+
+
+@app.route("/admin/students/<student_id>/status", methods=["POST"])
+def admin_update_student_status(student_id):
+    if not is_admin_logged_in():
+        return redirect(url_for("login"))
+
+    action = request.form.get("action")
+    if action not in ["approved", "rejected", "suspended"]:
+        flash("Invalid action requested.", "error")
+        return redirect(url_for("admin_students"))
+
+    if not admin_database:
+        flash("Database connection unavailable.", "error")
+        return redirect(url_for("admin_students"))
+
+    try:
+        admin_database.table("profiles").update({
+            "status": action,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", student_id).execute()
+
+        flash(f"Student account has been marked as {action}.", "success")
+    except Exception:
+        logger.exception("Failed to update student status")
+        flash("An error occurred while updating the student status.", "error")
+
+    return redirect(url_for("admin_students"))
 
 @app.route("/admin/settings", methods=["GET", "POST"])
 def admin_settings():
