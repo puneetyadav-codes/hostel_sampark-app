@@ -372,6 +372,20 @@ class TestApp(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(b"ai-chat-container", response.data)
 
+    def test_student_registration_validation(self):
+        # Registration requires all fields
+        response = self.client.post("/register", data={
+            "full_name": "Test Student",
+            "email": "test@example.com",
+            # missing rest of fields
+        })
+        self.assertEqual(response.status_code, 302)
+
+    def test_admin_update_student_status_requires_admin(self):
+        response = self.client.post("/admin/students/123/status", data={"action": "approved"})
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login", response.headers["Location"])
+
 
 if __name__ == "__main__":
     unittest.main()
