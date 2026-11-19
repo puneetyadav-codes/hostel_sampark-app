@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Verify Your Email · Hostel Sampark{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-xl dark:border-slate-800 dark:bg-slate-900 sm:p-8">
+    <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
+        <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+    </div>
+
+    <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Check Your Inbox</h1>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        We have sent a verification link to your email address. Please click the link to confirm you control the email.
+    </p>
+
+    <div class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
+        <strong>Important:</strong> After verifying your email, your account will remain <em>Pending Admin Approval</em> until the hostel warden approves your residency details.
+    </div>
+
+    <div class="mt-6">
+        <a href="{{ url_for('student_login') }}" class="button-primary inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold">
+            Go to Student Sign In
+        </a>
+    </div>
+</div>
+{% endblock %}

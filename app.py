@@ -93,6 +93,8 @@ ADMIN_PASSWORD = get_required_setting("ADMIN_PASSWORD")
 supabase_url: str = get_required_setting("SUPABASE_URL")
 admin_database_key = os.getenv("SUPABASE_SECRET_KEY", "").strip()
 admin_database: Optional[Client] = create_client(supabase_url, admin_database_key) if admin_database_key else None
+supabase_anon_key = os.getenv("SUPABASE_ANON_KEY", "").strip() or admin_database_key
+auth_client: Optional[Client] = create_client(supabase_url, supabase_anon_key) if supabase_anon_key else None
 ADMIN_PAGE_SIZE = 20
 
 
@@ -675,6 +677,93 @@ def grievance_status():
         invalid_ticket_id=invalid_lookup,
         lookup_failed=lookup_failed,
     )
+
+@app.route("/student/verify-notice")
+def student_verify_notice():
+    return render_template("verify_notice.html")
+
+
+@app.route("/register", methods=["GET", "POST"])
+@app.route("/student/register", methods=["GET", "POST"])
+@limiter.limit("20 per 15 minutes")
+def student_register():
+    if request.method == "GET":
+        return render_template("register.html", hostels=get_configured_hostels())
+
+    full_name = request.form.get("full_name", "").strip()
+    email = request.form.get("email", "").strip().lower()
+    hostel = request.form.get("hostel", "").strip()
+    room_number = request.form.get("room_number", "").strip()
+    enrollment_no = request.form.get("enrollment_no", "").strip()
+    contact_number = request.form.get("contact_number", "").strip()
+    password = request.form.get("password", "")
+
+    if not all([full_name, email, hostel, room_number, enrollment_no, contact_number, password]):
+        flash("All registration fields are required.", "error")
+        return redirect(url_for("student_register"))
+
+    if len(password) < 6:
+        flash("Password must be at least 6 characters.", "error")
+        return redirect(url_for("student_register"))
+
+    if hostel not in get_configured_hostels():
+        flash("Please select a valid hostel from the list.", "error")
+        return redirect(url_for("student_register"))
+
+    if not admin_database or not auth_client:
+        flash("Registration is not available right now. Please try again later.", "error")
+        return redirect(url_for("student_register"))
+
+    # Uniqueness check: Ensure enrollment_no or contact_number is not already registered
+    try:
+        existing_profile = (
+            admin_database.table("profiles")
+            .select("id, enrollment_no, contact_number")
+            .or_(f"enrollment_no.eq.{enrollment_no},contact_number.eq.{contact_number}")
+            .limit(1)
+            .execute()
+        )
+        if existing_profile.data:
+            flash("A student with this Enrollment Number or Contact Number is already registered.", "error")
+            return redirect(url_for("student_register"))
+    except Exception:
+        logger.exception("Failed to check duplicate profile registration")
+
+    # Create account in Supabase Auth
+    try:
+        auth_response = auth_client.auth.sign_up({
+            "email": email,
+            "password": password,
+        })
+        user = auth_response.user if auth_response else None
+        if not user or not user.id:
+            flash("Could not create account. Please ensure the email format is correct.", "error")
+            return redirect(url_for("student_register"))
+
+        user_id = str(user.id)
+
+        # Store student details in profiles table
+        admin_database.table("profiles").insert({
+            "id": user_id,
+            "full_name": full_name,
+            "hostel": hostel,
+            "room_number": room_number,
+            "enrollment_no": enrollment_no,
+            "contact_number": contact_number,
+            "status": "pending",
+        }).execute()
+
+        return redirect(url_for("student_verify_notice"))
+
+    except Exception as err:
+        logger.exception("Student registration failed")
+        error_msg = str(err)
+        if "already registered" in error_msg.lower() or "unique" in error_msg.lower():
+            flash("An account with this email address already exists.", "error")
+        else:
+            flash("Registration could not be completed. Please check your details and try again.", "error")
+        return redirect(url_for("student_register"))
+
 
 @app.route("/admin-login", methods=["GET", "POST"])
 @app.route("/login", methods=["GET", "POST"])
