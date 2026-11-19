@@ -44,11 +44,17 @@
                         Settings        
                     </a>
                     <form action="{{ url_for('logout') }}" method="POST" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="nav-link signout-link rounded-lg px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-rose-500">Sign out</button></form>
-                {% else %}
+                {% elif session.get('student_logged_in') %}
                     <a href="{{ url_for('home') }}" class="nav-link rounded-lg px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-indigo-500 {% if request.endpoint == 'home' %}is-current{% endif %}">Home</a>
                     <a href="{{ url_for('submit_grievance') }}" class="nav-link rounded-lg px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-indigo-500 {% if request.endpoint == 'submit_grievance' %}is-current{% endif %}">Submit</a>
-                    <a href="{{ url_for('grievance_status') }}" class="nav-link rounded-lg px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-indigo-500 {% if request.endpoint == 'grievance_status' %}is-current{% endif %}">Track</a>
-                    <a href="/admin-login" class="nav-link nav-login ml-1 rounded-lg border px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-indigo-500 {% if request.endpoint == 'login' %}is-current{% endif %}">Admin Login</a>
+                    <a href="{{ url_for('grievance_status') }}" class="nav-link rounded-lg px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-indigo-500 {% if request.endpoint == 'grievance_status' %}is-current{% endif %}">My Grievances</a>
+                    <span class="text-xs text-slate-500 font-medium px-2 py-1 bg-slate-100 rounded-md dark:bg-slate-800 dark:text-slate-300">{{ session.get('student_name') }}</span>
+                    <form action="{{ url_for('student_logout') }}" method="POST" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="nav-link signout-link rounded-lg px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-rose-500">Sign out</button></form>
+                {% else %}
+                    <a href="{{ url_for('home') }}" class="nav-link rounded-lg px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-indigo-500 {% if request.endpoint == 'home' %}is-current{% endif %}">Home</a>
+                    <a href="{{ url_for('student_login') }}" class="nav-link rounded-lg px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-indigo-500 {% if request.endpoint == 'student_login' %}is-current{% endif %}">Student Sign In</a>
+                    <a href="{{ url_for('student_register') }}" class="button-primary rounded-lg px-3 py-2 text-xs font-semibold">Register</a>
+                    <a href="{{ url_for('login') }}" class="nav-link nav-login ml-1 rounded-lg border px-2.5 py-1.5 text-xs transition focus:outline-none focus:ring-2 focus:ring-indigo-500 {% if request.endpoint == 'login' %}is-current{% endif %}">Staff</a>
                 {% endif %}
                 <button 
                     id="theme-toggle"

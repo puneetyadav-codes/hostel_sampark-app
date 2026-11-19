@@ -765,6 +765,101 @@ def student_register():
         return redirect(url_for("student_register"))
 
 
+@app.route("/student-login", methods=["GET", "POST"])
+@app.route("/student/login", methods=["GET", "POST"])
+@limiter.limit("50 per 15 minutes")
+def student_login():
+    if session.get("student_logged_in"):
+        return redirect(url_for("submit_grievance"))
+
+    if request.method == "GET":
+        return render_template("student_login.html")
+
+    email = request.form.get("email", "").strip().lower()
+    password = request.form.get("password", "")
+
+    if not email or not password:
+        flash("Please enter both email and password.", "error")
+        return redirect(url_for("student_login"))
+
+    if not auth_client or not admin_database:
+        flash("Sign in service is temporarily unavailable. Please try again later.", "error")
+        return redirect(url_for("student_login"))
+
+    try:
+        # Authenticate credentials via Supabase Auth
+        auth_response = auth_client.auth.sign_in_with_password({
+            "email": email,
+            "password": password,
+        })
+        user = auth_response.user if auth_response else None
+        if not user or not user.id:
+            flash("Invalid email or password.", "error")
+            return redirect(url_for("student_login"))
+
+        user_id = str(user.id)
+
+        # Check if email confirmation is confirmed by Supabase
+        if not getattr(user, "email_confirmed_at", None) and not user.confirmed_at:
+            flash("Please verify your email address first using the link sent to your inbox.", "error")
+            return redirect(url_for("student_login"))
+
+        # Look up residency profile
+        profile_result = (
+            admin_database.table("profiles")
+            .select("id, full_name, hostel, room_number, enrollment_no, contact_number, status")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+        )
+        profile = profile_result.data[0] if profile_result.data else None
+        if not profile:
+            flash("Profile details not found. Please contact the hostel office.", "error")
+            return redirect(url_for("student_login"))
+
+        status = profile.get("status", "pending")
+        if status == "pending":
+            flash("Your email is verified, but your account is pending approval by the hostel administrator.", "error")
+            return redirect(url_for("student_login"))
+        elif status == "rejected":
+            flash("Your registration was rejected by the hostel administrator. Please contact the hostel office.", "error")
+            return redirect(url_for("student_login"))
+        elif status == "suspended":
+            flash("Your student account has been temporarily suspended. Please contact the hostel warden.", "error")
+            return redirect(url_for("student_login"))
+        elif status != "approved":
+            flash("Your account is not active.", "error")
+            return redirect(url_for("student_login"))
+
+        # Approved student: establish clean session
+        session.clear()
+        session["student_logged_in"] = True
+        session["student_id"] = profile["id"]
+        session["student_name"] = profile["full_name"]
+        session["student_hostel"] = profile["hostel"]
+        session["student_room"] = profile["room_number"]
+        session["student_email"] = email
+
+        flash(f"Welcome back, {profile['full_name']}!", "success")
+        return redirect(url_for("submit_grievance"))
+
+    except Exception as err:
+        logger.exception("Student login failed")
+        error_msg = str(err).lower()
+        if "invalid" in error_msg or "credentials" in error_msg:
+            flash("Invalid email or password.", "error")
+        else:
+            flash("Sign in failed. Please check your credentials.", "error")
+        return redirect(url_for("student_login"))
+
+
+@app.route("/student/logout", methods=["POST"])
+def student_logout():
+    session.clear()
+    flash("You have been signed out.", "success")
+    return redirect(url_for("student_login"))
+
+
 @app.route("/admin-login", methods=["GET", "POST"])
 @app.route("/login", methods=["GET", "POST"])
 @limiter.limit("100 per 15 minutes")
